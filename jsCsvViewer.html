@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>jsCsvViewer Ver.1.0.0</title>
+  <style type="text/css">
+    #drop {
+      position: absolute;
+      top: 10; left: 10; width: 98%; height: 98%;
+      z-index: -1;
+    }
+    #fileName {
+      padding-left: 10px;
+    }
+    #grid {
+      padding-top: 10px;
+    }
+    .jexcel thead tr td {
+        text-align: center !important;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jspreadsheet-ce/dist/jspreadsheet.min.css" media="screen">
+  <link rel="stylesheet" href="https://jsuites.net/v4/jsuites.css" type="text/css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Material+Icons" type="text/css" />
+</head>
+<body>
+  <div id="drop" ondragover="onDragOver(event)">
+    CSVファイルをドラッグ&ドロップするかファイルの選択をしてください。<br>
+    <input type="file" id="fileBox" accept=".csv, .tsv, .txt" style="display:none">
+    <button id="fileSelect" type="button">ファイルを選択</button><span id="fileName"></span><br>
+    <span style="flex:1;">文字コード
+      <select id="encode-type">
+        <option value="shift-jis">shift-jis</option>
+        <option value="utf-8">utf-8</option>
+      </select>
+    </span>
+    <input type="checkbox" id="isHeader" name="header" /><label for="header">ヘッダー</label>
+    <button type="button" onClick="reload()">再読み込み</button>
+    <button type="button" onClick="copyAllToClipboard()" >全選択コピー</button>
+    <br>
+    <div id="grid"></div>
+  </div>
+<script src="https://cdn.jsdelivr.net/npm/jspreadsheet-ce/dist/index.min.js"></script>
+  <script src="https://jsuites.net/v4/jsuites.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="text/javascript">
+    let spreadsheet;  // jSpreadsheetのインスタンス変数
+    let savePath;     // CSVパス退避変数
+
+    var emptyData = Array.from({ length: 10 }, () => Array(10).fill(''));
+    createGrid(emptyData, true);
+
+    const fileSelect = document.getElementById("fileSelect");
+    const fileBox = document.getElementById("fileBox");
+    fileBox.addEventListener("change", inputChange);
+    fileSelect.addEventListener("click", () => { fileBox.click(); }, false);
+
+    if (window.File) {
+      document.getElementById("drop").addEventListener("drop", onDrop, false);
+    } else {
+      window.alert("本ブラウザではFile APIが使えません");
+    }
+
+    // ファイル選択のファイルのプロパティ情報読み取り処理
+    function inputChange(event) {
+      let files = event.target.files;
+      readCSV(files[0]);
+    }
+
+    // Drop領域にドロップした際のファイルのプロパティ情報読み取り処理
+    function onDrop(event) {
+      let files = event.dataTransfer.files;
+      readCSV(files[0]);
+    }
+
+    // ドラッグオーバー処理
+    function onDragOver(event){ 
+      event.preventDefault(); 
+    }
+
+    // 再読み込みボタンのクリック処理
+    function reload() {
+      if (savePath)
+        readCSV(savePath);
+    }
+
+    // 全選択コピーボタンのクリック処理
+    function copyAllToClipboard() {
+      spreadsheet.selectAll();
+      spreadsheet.copy();
+    }
+
+    // CSVファイルの読み取り処理
+    function readCSV(csvpath){
+       jspreadsheet.destroy(document.getElementById('grid'));
+
+      let element = document.getElementById("fileName");
+      element.innerText = csvpath.name;
+
+      let disp = document.getElementById("disp");
+      let encode_type = document.getElementById("encode-type").value;
+
+      let f = csvpath;
+      savePath = f
+      let reader = new FileReader();
+      reader.onerror = function () {
+        disp.innerHTML = "読み取り時にエラーが発生しました。";
+      }
+
+      if (f.type.match('text.*') || f.name.match(/csv$/m)) {
+        // ファイル読取が完了した際に呼ばれる処理
+        reader.onload = function () {
+          // FileReaderが取得したテキストをそのままdivタグに出力
+          let isHeader = document.getElementById("isHeader").checked;
+          Papa.parse(reader.result, {
+            header: isHeader,
+            complete: function(results) {
+              createGrid(results.data);
+            }
+          });
+        }
+        // readAsTextメソッドでファイルの内容を取得
+        reader.readAsText(f, encode_type);
+      }
+
+      event.preventDefault();
+    }
+
+    // グリッド生成処理
+    function createGrid(data, isNew=false) {
+      let isHeader = document.getElementById("isHeader").checked;
+      let grid = document.getElementById('grid');
+      const text = {
+        insertANewRowBefore: '上に行を挿入',
+        insertANewRowAfter: '下に行を挿入',
+        deleteSelectedRows: '選択行の削除',
+        copy: 'コピー',
+        paste: '貼り付け'
+      };
+
+      // 保存ファイル名 jsCsv_yyyyMMddHHmm.csv
+      let baseName = 'jsCsv';
+      let dt = new Date(Date.now() + 3600000 * 9).toISOString().replace(/[^0-9]/g, '').slice(0, -5);
+      if (!isNew) {
+        let filename = savePath.name.replace(/^.*[\\\/]/, '');
+        baseName = filename.split('.').slice(0, -1).join('.');
+      }
+
+      spreadsheet = new jspreadsheet(grid, {
+        data: data,
+        text: text,
+        colHeaders: isHeader ? Object.keys(data[0]) : [],
+        defaultColWidth: 100,    // デフォルトの幅を設定
+        defaultColAlign: 'left', // デフォルトの配置を左寄せに設定
+        allowManualInsertColumn: isNew,
+        allowManualInsertRow: isNew,
+        wordWrap: true,
+        csvFileName: baseName + '_' + dt, 
+        toolbar: [
+          { type: 'i', content: 'undo', onclick: () => spreadsheet.undo(), tooltip: '元に戻す' },
+          { type: 'i', content: 'redo', onclick: () => spreadsheet.redo(), tooltip: 'やり直し' },
+          { type: 'i', content: 'save', onclick: () => spreadsheet.download(), tooltip: '保存' },
+          { type: 'i', content: 'format_align_left', k: 'text-align', v: 'left', tooltip: '左寄せ' },
+          { type: 'i', content:'format_align_center', k:'text-align', v:'center', tooltip: '中央寄せ' },
+          { type: 'i', content: 'format_align_right', k: 'text-align', v: 'right', tooltip: '右寄せ' },
+          { type: 'i', content: 'format_bold', k: 'font-weight', v: 'bold', tooltip: '太字' },
+          { type: 'color', content: 'format_color_text', k: 'color', tooltip: '文字色' },
+          { type: 'color', content: 'format_color_fill', k: 'background-color', tooltip: '背景色' },
+          { type: 'i', content: 'add', onclick: () => addOrRemoveColumn(true), tooltip: '列を追加'},
+          { type: 'i', content: 'remove', onclick: () => addOrRemoveColumn(false), tooltip: '列を削除' },
+        ],
+        // 読み込み完了後のイベントリスナー
+        onload: (event, instance) => { 
+          // A1にフォーカス
+          instance.updateSelectionFromCoords(0, 0);
+          // 末尾空行を削除
+          if (!isNew) removeEmptyLastRow(instance); 
+        },
+      });
+    }
+
+    // 列追加/削除処理
+    function addOrRemoveColumn(isAdd) {
+      let selectedColumns = spreadsheet.getSelectedColumns();
+      if (selectedColumns.length > 0) {
+        if (isAdd)
+          spreadsheet.insertColumn(1, selectedColumns[selectedColumns.length - 1] + 1);
+        else
+          spreadsheet.deleteColumn(selectedColumns[0]);
+      }
+    }
+
+    // 最終行が空行なら削除する関数
+    function removeEmptyLastRow(instance) {
+        let data = instance.getData();
+        let lastRowIndex = data.length - 1;
+        let lastRow = data[lastRowIndex];
+        let isEmptyRow = lastRow.every(function(cell) {
+            return cell === '';
+        });
+        if (isEmptyRow)
+          instance.deleteRow(lastRowIndex);
+    }
+</script>
+</body>
+</html>
