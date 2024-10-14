@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>jsCsvViewer Ver.1.0.0</title>
+  <title>jsCsvViewer Ver.1.0.1</title>
   <style type="text/css">
     #drop {
       position: absolute;
@@ -34,9 +34,11 @@
         <option value="utf-8">utf-8</option>
       </select>
     </span>
-    <input type="checkbox" id="isHeader" name="header" /><label for="header">ヘッダー</label>
+    <input type="checkbox" id="isHeader" /><label for="isHeader">ヘッダー</label>
     <button type="button" onClick="reload()">再読み込み</button>
     <button type="button" onClick="copyAllToClipboard()" >全選択コピー</button>
+    <input type="checkbox" id="isLazyLoading" onclick="validateCheckBox(event)"/><label for="isLazyLoading">遅延読込み</label>
+    <input type="checkbox" id="isPagination" onclick="validateCheckBox(event)"/><label for="isPagination">ページネーション</label>
     <br>
     <div id="grid"></div>
   </div>
@@ -47,7 +49,7 @@
     let spreadsheet;  // jSpreadsheetのインスタンス変数
     let savePath;     // CSVパス退避変数
 
-    var emptyData = Array.from({ length: 10 }, () => Array(10).fill(''));
+    let emptyData = Array.from({ length: 10 }, () => Array(10).fill(''));
     createGrid(emptyData, true);
 
     const fileSelect = document.getElementById("fileSelect");
@@ -90,6 +92,15 @@
       spreadsheet.copy();
     }
 
+    // 遅延読込みとページネーションチェック処理
+    function validateCheckBox(event) {
+      if (document.getElementById("isLazyLoading").checked &&
+        　document.getElementById("isPagination").checked) {
+          alert("遅延読込みかページネーションのどちらかを選択して下さい。");
+          event.target.checked = false;
+      }
+    }
+
     // CSVファイルの読み取り処理
     function readCSV(csvpath){
        jspreadsheet.destroy(document.getElementById('grid'));
@@ -114,6 +125,7 @@
           let isHeader = document.getElementById("isHeader").checked;
           Papa.parse(reader.result, {
             header: isHeader,
+            worker: true,
             complete: function(results) {
               createGrid(results.data);
             }
@@ -130,6 +142,10 @@
     function createGrid(data, isNew=false) {
       let isHeader = document.getElementById("isHeader").checked;
       let grid = document.getElementById('grid');
+      let rect = grid.getBoundingClientRect();
+      let isLazyLoading = document.getElementById("isLazyLoading").checked;
+      let isPagination = document.getElementById("isPagination").checked;
+
       const text = {
         insertANewRowBefore: '上に行を挿入',
         insertANewRowAfter: '下に行を挿入',
@@ -149,12 +165,21 @@
       spreadsheet = new jspreadsheet(grid, {
         data: data,
         text: text,
+        lazyLoading: isLazyLoading,
+        tableOverflow: isLazyLoading,
+        loadingSpin: isLazyLoading,
+        search: isPagination,
+        pagination: isPagination ? 10 : undefined,
+        paginationOptions: [10, 25, 50, 75, 100],
+        tableHeight: (window.innerHeight - rect.top) * 0.9 + 'px',
         colHeaders: isHeader ? Object.keys(data[0]) : [],
         defaultColWidth: 100,    // デフォルトの幅を設定
         defaultColAlign: 'left', // デフォルトの配置を左寄せに設定
         allowManualInsertColumn: isNew,
         allowManualInsertRow: isNew,
         wordWrap: true,
+        search: isPagination,
+        pagination: isPagination ? 10 : undefined,
         csvFileName: baseName + '_' + dt, 
         toolbar: [
           { type: 'i', content: 'undo', onclick: () => spreadsheet.undo(), tooltip: '元に戻す' },
@@ -174,7 +199,14 @@
           // A1にフォーカス
           instance.updateSelectionFromCoords(0, 0);
           // 末尾空行を削除
-          if (!isNew) removeEmptyLastRow(instance); 
+          if (!isNew) removeEmptyLastRow(instance);
+          // 遅延読込み時のヘッダー位置不具合対応
+          if (isLazyLoading) {
+            const elements = document.querySelectorAll('.jexcel_container.with-toolbar .jexcel > thead > tr > td');
+            elements.forEach(element => {
+              element.style.top = '0px';
+            });
+          }
         },
       });
     }
