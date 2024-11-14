@@ -95,7 +95,7 @@
     // 遅延読込みとページネーションチェック処理
     function validateCheckBox(event) {
       if (document.getElementById("isLazyLoading").checked &&
-        　document.getElementById("isPagination").checked) {
+          document.getElementById("isPagination").checked) {
           alert("遅延読込みかページネーションのどちらかを選択して下さい。");
           event.target.checked = false;
       }
@@ -103,7 +103,7 @@
 
     // CSVファイルの読み取り処理
     function readCSV(csvpath){
-       jspreadsheet.destroy(document.getElementById('grid'));
+      jspreadsheet.destroy(document.getElementById('grid'));
 
       let element = document.getElementById("fileName");
       element.innerText = csvpath.name;
